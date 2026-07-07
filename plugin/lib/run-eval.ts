@@ -13,7 +13,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
 import { dirname, join, parse } from "path"
 import { randomBytes } from "crypto"
-import { tmpdir } from "os"
+import { tmpdir as osTmpdir } from "os"
 
 import { isFailedProcess, runProcess } from "./process"
 
@@ -165,7 +165,6 @@ async function runSingleQuery(
   skillName: string,
   skillDescription: string,
   timeout: number,
-  _projectRoot: string,
   agent: string,
   triggerOnly: boolean,
   model?: string,
@@ -178,12 +177,11 @@ async function runSingleQuery(
 
   const uniqueId = randomBytes(4).toString("hex")
   const cleanName = `${skillName}-skill-${uniqueId}`
-  const evalRoot = mkdtempSync(join(tmpdir(), "opencode-skill-eval-"))
+  const evalRoot = mkdtempSync(join(osTmpdir(), "opencode-skill-eval-"))
   const skillsDir = join(evalRoot, ".opencode", "skills", cleanName)
   const skillFile = join(skillsDir, "SKILL.md")
 
   try {
-    await assertNoInstalledSkillConflict(skillName, evalRoot)
     mkdirSync(skillsDir, { recursive: true })
 
     // Use YAML block scalar to avoid breaking on quotes in description
@@ -351,7 +349,6 @@ export async function runEval(opts: RunEvalOptions): Promise<EvalOutput> {
           skillName,
           description,
           timeout,
-          projectRoot,
           agent,
           triggerOnly,
           model,

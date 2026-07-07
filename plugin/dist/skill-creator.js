@@ -12528,7 +12528,7 @@ function parseSkillMd(skillPath) {
 import { existsSync as existsSync2, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { dirname, join as join3, parse as parse5 } from "path";
 import { randomBytes } from "crypto";
-import { tmpdir } from "os";
+import { tmpdir as osTmpdir } from "os";
 
 // lib/process.ts
 import { spawn } from "child_process";
@@ -12656,7 +12656,7 @@ function findSkillConflicts(stdoutText, skillName) {
     return [];
   }
 }
-async function assertNoInstalledSkillConflict2(skillName, projectRoot) {
+async function assertNoInstalledSkillConflict(skillName, projectRoot) {
   let result;
   try {
     result = await runProcess(["opencode", "debug", "skill"], {
@@ -12688,17 +12688,16 @@ function findProjectRoot(cwd) {
   }
   return cwd ?? process.cwd();
 }
-async function runSingleQuery(query, skillName, skillDescription, timeout, _projectRoot, agent, triggerOnly, model) {
+async function runSingleQuery(query, skillName, skillDescription, timeout, agent, triggerOnly, model) {
   if (!SKILL_NAME_RE.test(skillName)) {
     throw new Error(`Invalid skill name "${skillName}". Expected kebab-case (lowercase letters, numbers, and hyphens only).`);
   }
   const uniqueId = randomBytes(4).toString("hex");
   const cleanName = `${skillName}-skill-${uniqueId}`;
-  const evalRoot = mkdtempSync(join3(tmpdir(), "opencode-skill-eval-"));
+  const evalRoot = mkdtempSync(join3(osTmpdir(), "opencode-skill-eval-"));
   const skillsDir = join3(evalRoot, ".opencode", "skills", cleanName);
   const skillFile = join3(skillsDir, "SKILL.md");
   try {
-    await assertNoInstalledSkillConflict2(skillName, evalRoot);
     mkdirSync(skillsDir, { recursive: true });
     const indentedDesc = skillDescription.split(`
 `).join(`
@@ -12811,7 +12810,7 @@ async function runEval(opts) {
       if (!job)
         break;
       try {
-        const triggered = await runSingleQuery(job.item.query, skillName, description, timeout, projectRoot, agent, triggerOnly, model);
+        const triggered = await runSingleQuery(job.item.query, skillName, description, timeout, agent, triggerOnly, model);
         jobResults.push({
           query: job.item.query,
           triggered,
@@ -12882,7 +12881,7 @@ async function runEval(opts) {
 // lib/improve-description.ts
 import { mkdirSync as mkdirSync2, unlinkSync, writeFileSync as writeFileSync2 } from "fs";
 import { join as join4 } from "path";
-import { tmpdir as tmpdir2 } from "os";
+import { tmpdir } from "os";
 import { randomBytes as randomBytes2 } from "crypto";
 
 // lib/failure-taxonomy.ts
@@ -12921,7 +12920,7 @@ function formatFailureDiagnostics(diagnostics) {
 
 // lib/improve-description.ts
 async function callOpenCode(prompt, model, timeout = 300) {
-  const tmpPath = join4(tmpdir2(), `skill-creator-${randomBytes2(6).toString("hex")}.md`);
+  const tmpPath = join4(tmpdir(), `skill-creator-${randomBytes2(6).toString("hex")}.md`);
   writeFileSync2(tmpPath, prompt);
   try {
     const cmd = ["opencode", "run", "--format", "json"];
@@ -15053,6 +15052,7 @@ var SkillCreatorPlugin = async (ctx) => {
           }
           const meta = parseSkillMd(args.skillPath);
           const projectRoot = findProjectRoot();
+          await assertNoInstalledSkillConflict(meta.name, projectRoot);
           const result = await runEval({
             evalSet,
             skillName: meta.name,
