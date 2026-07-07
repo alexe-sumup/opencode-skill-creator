@@ -22,7 +22,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs"
 import { validateSkill } from "./lib/validate"
 import { parseSkillMd } from "./lib/utils"
 import {
-  assertNoInstalledSkillConflict,
   runEval,
   findProjectRoot,
 } from "./lib/run-eval"
@@ -518,7 +517,6 @@ export const SkillCreatorPlugin: Plugin = async (ctx) => {
 
           const meta = parseSkillMd(args.skillPath)
           const projectRoot = findProjectRoot()
-          await assertNoInstalledSkillConflict(meta.name, projectRoot)
 
           const result = await runEval({
             evalSet,

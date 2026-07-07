@@ -10,9 +10,10 @@
  * whether the skill was triggered.
  */
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
 import { dirname, join, parse } from "path"
 import { randomBytes } from "crypto"
+import { tmpdir } from "os"
 
 import { isFailedProcess, runProcess } from "./process"
 
@@ -152,15 +153,19 @@ export function findProjectRoot(cwd?: string): string {
 }
 
 /**
- * Run a single query against `opencode run` and return whether the
- * temporary skill name appeared in the output.
+ * Run a single query against `opencode run` and return whether the temporary
+ * skill name appeared in the output.
+ *
+ * Each run gets its own temporary OpenCode project root. This keeps parallel
+ * workers from seeing one another's synthetic skills and producing false
+ * negatives when a sibling synthetic skill is selected.
  */
 async function runSingleQuery(
   query: string,
   skillName: string,
   skillDescription: string,
   timeout: number,
-  projectRoot: string,
+  _projectRoot: string,
   agent: string,
   triggerOnly: boolean,
   model?: string,
@@ -173,10 +178,12 @@ async function runSingleQuery(
 
   const uniqueId = randomBytes(4).toString("hex")
   const cleanName = `${skillName}-skill-${uniqueId}`
-  const skillsDir = join(projectRoot, ".opencode", "skills", cleanName)
+  const evalRoot = mkdtempSync(join(tmpdir(), "opencode-skill-eval-"))
+  const skillsDir = join(evalRoot, ".opencode", "skills", cleanName)
   const skillFile = join(skillsDir, "SKILL.md")
 
   try {
+    await assertNoInstalledSkillConflict(skillName, evalRoot)
     mkdirSync(skillsDir, { recursive: true })
 
     // Use YAML block scalar to avoid breaking on quotes in description
@@ -242,7 +249,7 @@ async function runSingleQuery(
     }
 
     const result = await runProcess(cmd, {
-      cwd: projectRoot,
+      cwd: evalRoot,
       env: { ...process.env },
       timeoutMs,
       maxStderrChars,
@@ -270,9 +277,9 @@ async function runSingleQuery(
 
     return triggered
   } finally {
-    // Clean up the temporary skill directory
-    if (existsSync(skillsDir)) {
-      rmSync(skillsDir, { recursive: true, force: true })
+    // Clean up the isolated temporary project root.
+    if (existsSync(evalRoot)) {
+      rmSync(evalRoot, { recursive: true, force: true })
     }
   }
 }
