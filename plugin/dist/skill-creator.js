@@ -12525,7 +12525,15 @@ function parseSkillMd(skillPath) {
 }
 
 // lib/run-eval.ts
-import { existsSync as existsSync2, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import {
+  existsSync as existsSync2,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from "fs";
 import { dirname, join as join3, parse as parse5 } from "path";
 import { randomBytes } from "crypto";
 import { tmpdir as osTmpdir } from "os";
@@ -12688,7 +12696,29 @@ function findProjectRoot(cwd) {
   }
   return cwd ?? process.cwd();
 }
-async function runSingleQuery(query, skillName, skillDescription, timeout, agent, triggerOnly, model) {
+function symlinkProjectOpenCodeConfig(projectRoot, evalRoot, skillName) {
+  const sourceOpenCode = join3(projectRoot, ".opencode");
+  if (!existsSync2(sourceOpenCode))
+    return;
+  const targetOpenCode = join3(evalRoot, ".opencode");
+  mkdirSync(targetOpenCode, { recursive: true });
+  for (const entry of readdirSync(sourceOpenCode, { withFileTypes: true })) {
+    if (entry.name === "skills")
+      continue;
+    symlinkSync(join3(sourceOpenCode, entry.name), join3(targetOpenCode, entry.name));
+  }
+  const sourceSkills = join3(sourceOpenCode, "skills");
+  if (!existsSync2(sourceSkills))
+    return;
+  const targetSkills = join3(targetOpenCode, "skills");
+  mkdirSync(targetSkills, { recursive: true });
+  for (const entry of readdirSync(sourceSkills, { withFileTypes: true })) {
+    if (entry.name === skillName)
+      continue;
+    symlinkSync(join3(sourceSkills, entry.name), join3(targetSkills, entry.name));
+  }
+}
+async function runSingleQuery(query, skillName, skillDescription, timeout, projectRoot, agent, triggerOnly, model) {
   if (!SKILL_NAME_RE.test(skillName)) {
     throw new Error(`Invalid skill name "${skillName}". Expected kebab-case (lowercase letters, numbers, and hyphens only).`);
   }
@@ -12698,6 +12728,7 @@ async function runSingleQuery(query, skillName, skillDescription, timeout, agent
   const skillsDir = join3(evalRoot, ".opencode", "skills", cleanName);
   const skillFile = join3(skillsDir, "SKILL.md");
   try {
+    symlinkProjectOpenCodeConfig(projectRoot, evalRoot, skillName);
     mkdirSync(skillsDir, { recursive: true });
     const indentedDesc = skillDescription.split(`
 `).join(`
@@ -12810,7 +12841,7 @@ async function runEval(opts) {
       if (!job)
         break;
       try {
-        const triggered = await runSingleQuery(job.item.query, skillName, description, timeout, agent, triggerOnly, model);
+        const triggered = await runSingleQuery(job.item.query, skillName, description, timeout, projectRoot, agent, triggerOnly, model);
         jobResults.push({
           query: job.item.query,
           triggered,
@@ -13656,7 +13687,7 @@ Exit reason: ${exitReason}`);
 }
 
 // lib/aggregate.ts
-import { existsSync as existsSync3, readFileSync as readFileSync3, readdirSync, statSync } from "fs";
+import { existsSync as existsSync3, readFileSync as readFileSync3, readdirSync as readdirSync2, statSync } from "fs";
 import { join as join5, basename } from "path";
 function compareEvalIds(a, b) {
   const parseNumeric = (value) => {
@@ -13725,7 +13756,7 @@ function calculateStats(values) {
 function sortedDirs(dir, pattern) {
   if (!existsSync3(dir))
     return [];
-  return readdirSync(dir).filter((name) => {
+  return readdirSync2(dir).filter((name) => {
     const full = join5(dir, name);
     return statSync(full).isDirectory() && (!pattern || pattern.test(name));
   }).sort().map((name) => join5(dir, name));
@@ -13966,7 +13997,7 @@ import {
   existsSync as existsSync4,
   mkdirSync as mkdirSync3,
   readFileSync as readFileSync4,
-  readdirSync as readdirSync2,
+  readdirSync as readdirSync3,
   statSync as statSync2,
   writeFileSync as writeFileSync5
 } from "fs";
@@ -14090,7 +14121,7 @@ function findRunsRecursive(root, current, runs) {
     return;
   }
   const skip = new Set(["node_modules", ".git", "__pycache__", "skill", "inputs"]);
-  const entries = readdirSync2(current).sort();
+  const entries = readdirSync3(current).sort();
   for (const entry of entries) {
     const full = join6(current, entry);
     if (statSync2(full).isDirectory() && !skip.has(entry)) {
@@ -14144,7 +14175,7 @@ function buildRun(root, runDir) {
   const outputsDir = join6(runDir, "outputs");
   const outputFiles = [];
   if (existsSync4(outputsDir) && statSync2(outputsDir).isDirectory()) {
-    const files = readdirSync2(outputsDir).sort();
+    const files = readdirSync3(outputsDir).sort();
     for (const f of files) {
       const full = join6(outputsDir, f);
       if (statSync2(full).isFile() && !METADATA_FILES.has(f)) {
@@ -14512,12 +14543,12 @@ function exportStaticReview(opts) {
 }
 
 // lib/workflow-guard.ts
-import { existsSync as existsSync5, readdirSync as readdirSync3, statSync as statSync3 } from "fs";
+import { existsSync as existsSync5, readdirSync as readdirSync4, statSync as statSync3 } from "fs";
 import { basename as basename3, join as join7 } from "path";
 function sortedDirs2(dir, pattern) {
   if (!existsSync5(dir) || !statSync3(dir).isDirectory())
     return [];
-  return readdirSync3(dir).map((name) => join7(dir, name)).filter((full) => statSync3(full).isDirectory()).filter((full) => pattern ? pattern.test(basename3(full)) : true).sort();
+  return readdirSync4(dir).map((name) => join7(dir, name)).filter((full) => statSync3(full).isDirectory()).filter((full) => pattern ? pattern.test(basename3(full)) : true).sort();
 }
 function hasAtLeastOneRun(configDir) {
   const runDirs = sortedDirs2(configDir, /^run-/);
@@ -14684,7 +14715,7 @@ import {
   copyFileSync,
   existsSync as existsSync7,
   mkdirSync as mkdirSync5,
-  readdirSync as readdirSync4,
+  readdirSync as readdirSync5,
   readFileSync as readFileSync6,
   renameSync as renameSync2,
   rmSync as rmSync2,
@@ -14697,7 +14728,7 @@ var LEGACY_SKILL_NAME = "skill-creator";
 var INSTALL_VERSION_FILE = ".opencode-skill-creator-version";
 function copyDirRecursive(src, dest) {
   mkdirSync5(dest, { recursive: true });
-  for (const entry of readdirSync4(src)) {
+  for (const entry of readdirSync5(src)) {
     const srcPath = join9(src, entry);
     const destPath = join9(dest, entry);
     if (statSync4(srcPath).isDirectory()) {

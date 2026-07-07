@@ -10,7 +10,15 @@
  * whether the skill was triggered.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "fs"
 import { dirname, join, parse } from "path"
 import { randomBytes } from "crypto"
 import { tmpdir as osTmpdir } from "os"
@@ -152,6 +160,33 @@ export function findProjectRoot(cwd?: string): string {
   return cwd ?? process.cwd()
 }
 
+export function symlinkProjectOpenCodeConfig(
+  projectRoot: string,
+  evalRoot: string,
+  skillName: string,
+): void {
+  const sourceOpenCode = join(projectRoot, ".opencode")
+  if (!existsSync(sourceOpenCode)) return
+
+  const targetOpenCode = join(evalRoot, ".opencode")
+  mkdirSync(targetOpenCode, { recursive: true })
+
+  for (const entry of readdirSync(sourceOpenCode, { withFileTypes: true })) {
+    if (entry.name === "skills") continue
+    symlinkSync(join(sourceOpenCode, entry.name), join(targetOpenCode, entry.name))
+  }
+
+  const sourceSkills = join(sourceOpenCode, "skills")
+  if (!existsSync(sourceSkills)) return
+
+  const targetSkills = join(targetOpenCode, "skills")
+  mkdirSync(targetSkills, { recursive: true })
+  for (const entry of readdirSync(sourceSkills, { withFileTypes: true })) {
+    if (entry.name === skillName) continue
+    symlinkSync(join(sourceSkills, entry.name), join(targetSkills, entry.name))
+  }
+}
+
 /**
  * Run a single query against `opencode run` and return whether the temporary
  * skill name appeared in the output.
@@ -165,6 +200,7 @@ async function runSingleQuery(
   skillName: string,
   skillDescription: string,
   timeout: number,
+  projectRoot: string,
   agent: string,
   triggerOnly: boolean,
   model?: string,
@@ -182,6 +218,7 @@ async function runSingleQuery(
   const skillFile = join(skillsDir, "SKILL.md")
 
   try {
+    symlinkProjectOpenCodeConfig(projectRoot, evalRoot, skillName)
     mkdirSync(skillsDir, { recursive: true })
 
     // Use YAML block scalar to avoid breaking on quotes in description
@@ -349,6 +386,7 @@ export async function runEval(opts: RunEvalOptions): Promise<EvalOutput> {
           skillName,
           description,
           timeout,
+          projectRoot,
           agent,
           triggerOnly,
           model,
