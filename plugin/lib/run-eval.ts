@@ -285,7 +285,12 @@ async function runSingleQuery(
 
     const result = await runProcess(cmd, {
       cwd: evalRoot,
-      env: { ...process.env },
+      // opencode resolves its project root (and thus project-scoped skills) from
+      // $PWD, not the spawn cwd. Leaking the caller's PWD makes the nested run
+      // load the *real* project skill under test (base name), so its triggers are
+      // attributed to that skill instead of the synthetic one — a false 0. Pin PWD
+      // to evalRoot so only the synthetic skill (plus global skills) are in scope.
+      env: { ...process.env, PWD: evalRoot },
       timeoutMs,
       maxStderrChars,
       onStdoutChunk(chunk) {

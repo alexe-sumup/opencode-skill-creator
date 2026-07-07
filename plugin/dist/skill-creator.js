@@ -12789,7 +12789,7 @@ async function runSingleQuery(query, skillName, skillDescription, timeout, proje
     };
     const result = await runProcess(cmd, {
       cwd: evalRoot,
-      env: { ...process.env },
+      env: { ...process.env, PWD: evalRoot },
       timeoutMs,
       maxStderrChars,
       onStdoutChunk(chunk) {
