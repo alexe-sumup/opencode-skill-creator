@@ -11,6 +11,7 @@
  */
 
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -160,6 +161,21 @@ export function findProjectRoot(cwd?: string): string {
   return cwd ?? process.cwd()
 }
 
+/**
+ * Mirror a project config entry into the eval root. Prefers a symlink (cheap,
+ * no copy), passing an explicit type so directory links resolve correctly. On
+ * platforms where symlinks are unavailable — Windows without admin/Developer
+ * Mode rejects them with EPERM — fall back to a recursive copy so eval
+ * isolation still works cross-platform.
+ */
+function linkOrCopyConfigEntry(source: string, target: string, isDirectory: boolean): void {
+  try {
+    symlinkSync(source, target, isDirectory ? "dir" : "file")
+  } catch {
+    cpSync(source, target, { recursive: true })
+  }
+}
+
 export function symlinkProjectOpenCodeConfig(
   projectRoot: string,
   evalRoot: string,
@@ -173,7 +189,11 @@ export function symlinkProjectOpenCodeConfig(
 
   for (const entry of readdirSync(sourceOpenCode, { withFileTypes: true })) {
     if (entry.name === "skills") continue
-    symlinkSync(join(sourceOpenCode, entry.name), join(targetOpenCode, entry.name))
+    linkOrCopyConfigEntry(
+      join(sourceOpenCode, entry.name),
+      join(targetOpenCode, entry.name),
+      entry.isDirectory(),
+    )
   }
 
   const sourceSkills = join(sourceOpenCode, "skills")
@@ -183,7 +203,11 @@ export function symlinkProjectOpenCodeConfig(
   mkdirSync(targetSkills, { recursive: true })
   for (const entry of readdirSync(sourceSkills, { withFileTypes: true })) {
     if (entry.name === skillName) continue
-    symlinkSync(join(sourceSkills, entry.name), join(targetSkills, entry.name))
+    linkOrCopyConfigEntry(
+      join(sourceSkills, entry.name),
+      join(targetSkills, entry.name),
+      entry.isDirectory(),
+    )
   }
 }
 

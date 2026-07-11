@@ -12526,6 +12526,7 @@ function parseSkillMd(skillPath) {
 
 // lib/run-eval.ts
 import {
+  cpSync,
   existsSync as existsSync2,
   mkdirSync,
   mkdtempSync,
@@ -12696,6 +12697,13 @@ function findProjectRoot(cwd) {
   }
   return cwd ?? process.cwd();
 }
+function linkOrCopyConfigEntry(source, target, isDirectory) {
+  try {
+    symlinkSync(source, target, isDirectory ? "dir" : "file");
+  } catch {
+    cpSync(source, target, { recursive: true });
+  }
+}
 function symlinkProjectOpenCodeConfig(projectRoot, evalRoot, skillName) {
   const sourceOpenCode = join3(projectRoot, ".opencode");
   if (!existsSync2(sourceOpenCode))
@@ -12705,7 +12713,7 @@ function symlinkProjectOpenCodeConfig(projectRoot, evalRoot, skillName) {
   for (const entry of readdirSync(sourceOpenCode, { withFileTypes: true })) {
     if (entry.name === "skills")
       continue;
-    symlinkSync(join3(sourceOpenCode, entry.name), join3(targetOpenCode, entry.name));
+    linkOrCopyConfigEntry(join3(sourceOpenCode, entry.name), join3(targetOpenCode, entry.name), entry.isDirectory());
   }
   const sourceSkills = join3(sourceOpenCode, "skills");
   if (!existsSync2(sourceSkills))
@@ -12715,7 +12723,7 @@ function symlinkProjectOpenCodeConfig(projectRoot, evalRoot, skillName) {
   for (const entry of readdirSync(sourceSkills, { withFileTypes: true })) {
     if (entry.name === skillName)
       continue;
-    symlinkSync(join3(sourceSkills, entry.name), join3(targetSkills, entry.name));
+    linkOrCopyConfigEntry(join3(sourceSkills, entry.name), join3(targetSkills, entry.name), entry.isDirectory());
   }
 }
 async function runSingleQuery(query, skillName, skillDescription, timeout, projectRoot, agent, triggerOnly, model) {

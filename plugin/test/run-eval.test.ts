@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { mkdtempSync, mkdirSync, readlinkSync, writeFileSync } from "fs"
+import { mkdtempSync, mkdirSync, readlinkSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
 
@@ -86,18 +86,23 @@ test("buildEvalWarnings returns no warnings when any should-trigger query trigge
 test("symlinkProjectOpenCodeConfig preserves config and excludes tested skill", () => {
   const projectRoot = mkdtempSync(join(tmpdir(), "skill-eval-project-"))
   const evalRoot = mkdtempSync(join(tmpdir(), "skill-eval-root-"))
-  const sourceOpenCode = join(projectRoot, ".opencode")
-  mkdirSync(join(sourceOpenCode, "skills", "tested-skill"), { recursive: true })
-  mkdirSync(join(sourceOpenCode, "skills", "other-skill"), { recursive: true })
-  writeFileSync(join(sourceOpenCode, "opencode.json"), "{}")
+  try {
+    const sourceOpenCode = join(projectRoot, ".opencode")
+    mkdirSync(join(sourceOpenCode, "skills", "tested-skill"), { recursive: true })
+    mkdirSync(join(sourceOpenCode, "skills", "other-skill"), { recursive: true })
+    writeFileSync(join(sourceOpenCode, "opencode.json"), "{}")
 
-  symlinkProjectOpenCodeConfig(projectRoot, evalRoot, "tested-skill")
+    symlinkProjectOpenCodeConfig(projectRoot, evalRoot, "tested-skill")
 
-  expect(readlinkSync(join(evalRoot, ".opencode", "opencode.json"))).toBe(
-    join(sourceOpenCode, "opencode.json"),
-  )
-  expect(readlinkSync(join(evalRoot, ".opencode", "skills", "other-skill"))).toBe(
-    join(sourceOpenCode, "skills", "other-skill"),
-  )
-  expect(() => readlinkSync(join(evalRoot, ".opencode", "skills", "tested-skill"))).toThrow()
+    expect(readlinkSync(join(evalRoot, ".opencode", "opencode.json"))).toBe(
+      join(sourceOpenCode, "opencode.json"),
+    )
+    expect(readlinkSync(join(evalRoot, ".opencode", "skills", "other-skill"))).toBe(
+      join(sourceOpenCode, "skills", "other-skill"),
+    )
+    expect(() => readlinkSync(join(evalRoot, ".opencode", "skills", "tested-skill"))).toThrow()
+  } finally {
+    rmSync(projectRoot, { recursive: true, force: true })
+    rmSync(evalRoot, { recursive: true, force: true })
+  }
 })
